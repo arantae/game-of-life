@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: game.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: game.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview Main functionality of a Game of Life implementation.
+ * @author Antti Rantaeskola
+ * @version 1.0
+ */
+
+/** Canvas component for drawing */
+var canvas = document.getElementById("canvas");
+/** This variable is used to stop game iteration and to check if game is on */
+var intervalID = -1;
+/** The grid containing all the cells */
+var grid = resetGrid();
+/** Cell rectangle size used in drawing */ 
+var cellSize = 10;
+
+// Setting the event handling
+canvas.onclick = function() {flipCell(canvas, event)};
+startButton.onclick = function() {start()};
+stopButton.onclick = function() {stop()};
+clearButton.onclick = function() {clear()};
+
+drawGrid();
+
+/**
+ * Function flips a clicked cell in the grid into opposite value (either kills 
+ * a cell that is alive or brings a dead cell alive). If game is on function
+ * does not do anything.
+ */
+function flipCell(canvas, event) {
+    // Check if game is on
+    if (intervalID !== -1) {
+        return;
+    }
+    
+    // Then figure out correct coordinates
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.floor((event.clientX - rect.left) / cellSize);
+    var y = Math.floor((event.clientY - rect.top) / cellSize);
+    
+    grid[x + Grid.BOUNDARY][y + Grid.BOUNDARY].flip();
+    drawGrid();
+}
+
+/**
+ * Draws the grid. 
+ *
+ * NOTE: only a certain part of the actual grid is visible! Invisible boundary
+ * section is defined by the Grid constant set. This boundary is there to 
+ * provide some sort of illusion about infinite grid (moving things may move  
+ * beyond visible scope and thus the boundary areas seem to work correctly).
+ */
+function drawGrid() {
+    var ctx = canvas.getContext("2d");
+    var cell;
+
+    // Grid color
+    ctx.strokeStyle = "#afafaf";
+    
+
+    for (i = 0; i &lt; Grid.WIDTH - Grid.BOUNDARY * 2; i++) {
+        for (j = 0; j &lt; Grid.HEIGHT - Grid.BOUNDARY * 2; j++) {
+            cell = grid[i + Grid.BOUNDARY][j + Grid.BOUNDARY];
+            if (cell.state === State.ALIVE) {
+                // Color of alive cells
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(i * (cellSize), j * (cellSize), 
+                             cellSize, cellSize);
+            } else {
+                // Color of dead cells
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(i * (cellSize), j * (cellSize), 
+                             cellSize, cellSize);
+                ctx.strokeRect(i * (cellSize), j * (cellSize), 
+                               cellSize, cellSize);
+            }
+        }
+    }
+}
+
+/**
+ * Starts the game. Sets global variable intervalID to hold a value that can
+ * be used to stop the game iteration. Iteration speed or "tick length" depends 
+ * on the slider value from html.
+ */
+function start() {
+    var slider = document.getElementById("interval");
+    intervalID = setInterval(iteration, slider.value);
+}
+
+/**
+ * Stops the game.
+ */
+function stop() {
+    clearInterval(intervalID);
+    intervalID = -1;
+}
+
+/**
+ * Stops the game (just to be sure) and resets grid with dead cells.
+ */
+function clear() {
+    stop();
+    grid = resetGrid();
+    drawGrid();
+}
+
+/**
+ * Goes through a single game iteration.
+ *
+ * Checks (almost) each cell in the grid and applies the rules of the game
+ * (https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life)
+ * to every one of them simultaneously.
+ *
+ * NOTE: boundary cells are left outside the check to simplify the procedure.
+ * Rules cannot be applied to them in a meaningfull way anyway.
+ * 
+ * Once the game iteration is finished function also redraws the grid.
+ */
+function iteration() {
+    var changes = [];
+    var count;
+    var cell;
+    var i;
+    var j;
+    var len;
+    var x;
+    var y;
+
+    // First goes through all the cells and checks if any needs to be 
+    // changed (flipped). Does not flip them yet. Note the boundary values
+    // of i and j.
+    for (i = 1; i &lt; Grid.WIDTH - 1; i++) {
+        for (j = 1; j &lt; Grid.HEIGHT - 1; j++) {
+            cell = grid[i][j];
+            count = countAliveCells(i, j);
+
+            if (cell.state === State.ALIVE) {
+                if (count &lt; 2 || count > 3) {
+                    changes.push([i, j]);                  
+                }
+            } else if (cell.state === State.DEAD) {
+                if (count === 3) {
+                    changes.push([i, j]);
+                }
+            }
+        }
+    }
+    
+    // Then the flipping if necessary
+    len = changes.length;
+    for (i = 0; i &lt; len; i++) {
+        x = changes[i][0];
+        y = changes[i][1]; 
+        grid[x][y].flip();
+    }
+
+    drawGrid();
+}
+
+/**
+ * Counts the amount of cells that are alive around a cell.
+ *
+ * @param {number} x Cell's x coordinate
+ * @param {number} y Cell's y coordinate
+ * @returns {number} Count of living cells around the cell 
+ */
+function countAliveCells(x, y) {
+    var count = 0;
+    
+    // This array contains all eigth neighbouring cells
+    var cells = [
+        grid[x - 1][y - 1], grid[x][y - 1], grid[x + 1][y - 1],
+        grid[x - 1][y], grid[x + 1][y],
+        grid[x - 1][y + 1], grid[x][y + 1], grid[x + 1][y + 1]
+    ];
+    var i;
+    var len = cells.length;
+                        
+    for (i = 0; i &lt; len; i++) {
+        if (cells[i].state === State.ALIVE) {
+            count++;
+        }
+    }
+    
+    return count;
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Cell.html">Cell</a></li></ul><h3>Global</h3><ul><li><a href="global.html#canvas">canvas</a></li><li><a href="global.html#cellSize">cellSize</a></li><li><a href="global.html#clear">clear</a></li><li><a href="global.html#countAliveCells">countAliveCells</a></li><li><a href="global.html#drawGrid">drawGrid</a></li><li><a href="global.html#flipCell">flipCell</a></li><li><a href="global.html#Grid">Grid</a></li><li><a href="global.html#grid">grid</a></li><li><a href="global.html#intervalID">intervalID</a></li><li><a href="global.html#iteration">iteration</a></li><li><a href="global.html#resetGrid">resetGrid</a></li><li><a href="global.html#start">start</a></li><li><a href="global.html#State">State</a></li><li><a href="global.html#stop">stop</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Thu Nov 16 2017 02:49:23 GMT+0200 (EET)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
